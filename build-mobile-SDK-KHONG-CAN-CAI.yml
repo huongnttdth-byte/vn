@@ -1,0 +1,77 @@
+name: VN Game Booster - Build APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Tao APK
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Lay ma nguon
+        uses: actions/checkout@v4
+
+      - name: Cai Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # GitHub Ubuntu 24.04 da co san Android SDK 35 va build-tools 35.0.0.
+      # Khong dung android-actions/setup-android hoac sdkmanager (buoc dang bi loi).
+      - name: Kiem tra Android SDK co san
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar" || {
+            echo '::error::Runner khong co Android SDK 35'; exit 1;
+          }
+          test -f "$ANDROID_HOME/build-tools/35.0.0/aapt2" || {
+            echo '::error::Runner khong co Android build-tools 35.0.0'; exit 1;
+          }
+          echo 'Android SDK 35 OK'
+
+      - name: Cai Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Giai nen ma nguon
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipfile='VNGameBooster_NGUON_CHUAN.zip'
+          test -f "$zipfile" || { echo "::error::Khong tim thay $zipfile trong Code"; exit 1; }
+          unzip -tq "$zipfile" >/dev/null
+          mkdir -p "$RUNNER_TEMP/vn-booster"
+          unzip -oq "$zipfile" -d "$RUNNER_TEMP/vn-booster"
+          project="$RUNNER_TEMP/vn-booster/VN-Game-Booster"
+          test -f "$project/settings.gradle" || { echo '::error::Thieu settings.gradle'; exit 1; }
+          test -f "$project/app/build.gradle" || { echo '::error::Thieu app/build.gradle'; exit 1; }
+          echo "PROJECT_DIR=$project" >> "$GITHUB_ENV"
+          echo "Da tim thay du an: $project"
+
+      - name: Bien dich APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace -p "$PROJECT_DIR" :app:assembleDebug
+          apk="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk" || { echo '::error::Chua tao duoc APK'; exit 1; }
+          mkdir -p outputs
+          cp "$apk" outputs/VNGameBooster.apk
+          unzip -tq outputs/VNGameBooster.apk >/dev/null
+          echo 'Da tao file outputs/VNGameBooster.apk'
+
+      - name: Tai file APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VNGameBooster-APK
+          path: outputs/VNGameBooster.apk
+          if-no-files-found: error
