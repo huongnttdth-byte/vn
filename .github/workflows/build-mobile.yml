@@ -1,0 +1,54 @@
+name: VN Game Booster - Build APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Tao APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Lay ma nguon
+        uses: actions/checkout@v4
+
+      - name: Cai Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cai Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cai SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Cai Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Giai nen ma nguon
+        run: |
+          unzip -oq VNGameBooster_NGUON_CHUAN.zip -d "$RUNNER_TEMP/src"
+          test -f "$RUNNER_TEMP/src/VN-Game-Booster/app/build.gradle"
+          echo "PROJECT_DIR=$RUNNER_TEMP/src/VN-Game-Booster" >> "$GITHUB_ENV"
+
+      - name: Bien dich APK
+        run: |
+          gradle --no-daemon -p "$PROJECT_DIR" :app:assembleDebug --stacktrace
+          mkdir -p outputs
+          cp "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" outputs/VNGameBooster.apk
+          unzip -tq outputs/VNGameBooster.apk
+
+      - name: Tai APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VNGameBooster-APK
+          path: outputs/VNGameBooster.apk
+          if-no-files-found: error
